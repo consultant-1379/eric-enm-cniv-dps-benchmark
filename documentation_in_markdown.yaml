@@ -1,0 +1,4 @@
+documents:
+  - name: dps_benchmark_vulnerability_report
+    files:
+      - DPS_Benchmark_Vulnerability_Report_2.0.md

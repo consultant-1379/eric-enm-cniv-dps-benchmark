@@ -1,0 +1,87 @@
+global:
+  cnivAgent:
+    enabled: false
+  securityContext:
+    enabled: false
+  load:
+    type: ENM_23.1_Small_Cloud_Native
+    profiles: 20
+    otherSupportedLoad:
+      - ENM_23.2_Extra_Large_Physical
+      - ENM_23.3_Extra_Large_Physical
+      - ENM_23.3_Small_Cloud_Native
+  persistentVolumeClaim:
+    storageClass:
+      file: network-file
+      block: network-block
+  ignoreResources: true
+  registry:
+    url: armdocker.rnd.ericsson.se
+  images:
+    repo: proj_oss_releases
+    policy: Always
+    neo4j:
+      name: eric-enm-neo4j
+      tag: standalone
+    neo4jPopulator:
+      name: eric-neo4j-populator
+      tag: standalone
+    neo4jLoadProfiles:
+      name: neo4j-load-profiles
+      tag: standalone
+    loadGenerator:
+      name: eric-neo4j-load-generator
+      tag: standalone
+    controlClient:
+      name: eric-load-control-client
+      tag: standalone
+    controlServer:
+      name: eric-load-control-service
+      tag: standalone
+    loadTestFramework:
+      name: eric-dps-ltf
+      tag: standalone
+  neo4j:
+    isStandalone: true
+    rebuild: false
+  monitoring:
+    metricsEnabled: true
+  populator:
+    concurrent:
+      workers: 7
+
+# See comments in eric-neo4j-load-test-fwk/charts/build-utility/templates/build_utility_job.yaml.
+eric-neo4j-load-test-fwk-build-utility:
+  buildUtilityEnabled: false
+
+eric-neo4j-load-test-fwk-load-generator:
+  load:
+    generator:
+      extendedProperties:
+        - task.execution.threads=10
+        - task.retry.delay.initial=1000
+        - task.retry.attempts=3
+        - task.ignore.fatal.errors=false
+        - task.retry.delay.factor=5
+        - generator.start.minute=1
+        - generator.end.minute=60
+        - preferred.load.profiles=fmalarmprocessing-.*;mscmce.*
+        - transaction.scaling.pattern.mscmce.*=2
+
+eric-neo4j-load-test-fwk-data-populator:
+  load:
+    neo4j:
+      templateProperties:
+        ENM_23.1_Small_Cloud_Native:
+          - nodeType=startId;noOfMibs
+          - RadioNode_18_Q3_R49A16=1;10
+          - RadioNode_18_Q4_R57A02=1;10
+      extendedProperties:
+        - partitioned.database.fmdb=FM
+        - load.scaling.pattern.fmalarmprocessing-.*=2
+        - load.scaling.strategy=application_based
+    java:
+      debugPort: 5006
+
+tags:
+  validate: true

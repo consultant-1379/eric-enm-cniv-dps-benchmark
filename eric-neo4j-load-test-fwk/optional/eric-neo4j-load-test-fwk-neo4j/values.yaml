@@ -1,0 +1,29 @@
+# This chart can be installed on its own, or as part of the overall framework's chart. In the latter case, the below configuration
+# will be overwritten by whatever values are used for the whole framework. However, for cases where we want to install just this chart,
+# instead of being dependent on any of the other values YAML, this file will be used as default.
+global:
+  persistentVolumeClaim:
+    neo4j:
+      storage: 60Gi
+  neo4j:
+    instances: 3
+    mode: core
+    # the values for the memory and cpu are derived from the RCD tool for Small Cloud Native ENM https://resourceconfigurationdata.internal.ericsson.com:8888/#/deploymentsetup
+    requests:
+      memory: 49152Mi
+      cpu: 1988m
+    limits:
+      memory: 49152Mi
+      cpu: 7950m
+    env:
+      connector_bolt_thread_pool_min_size: 500
+      connector_bolt_thread_pool_max_size: 500
+      transaction_concurrent_max: 555
+      cacheWarmupEnable: true
+      heap_size: "12g"
+      pagecache_size: "14g"
+      iops_limit: 1500
+      final_report_delay: 120
+      max_direct_memory: "6g"
+    podAntiAffinityEnabled: true
+    isStandalone: false

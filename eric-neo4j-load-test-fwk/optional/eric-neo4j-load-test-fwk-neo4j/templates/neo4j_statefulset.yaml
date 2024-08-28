@@ -1,0 +1,289 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: neo4j
+  labels:
+    neo4j-cluster: load-test-fwk
+    benchmarkName: {{ $.Chart.Name }}
+spec:
+  selector:
+    matchLabels:
+      app: neo4j
+  serviceName: "neo4j"
+  replicas: {{ $.Values.global.neo4j.instances }}
+  template:
+    metadata:
+      labels:
+        app: neo4j
+        neo4j-cluster: load-test-fwk
+        container.kubeaudit.io/neo4j.allow-read-only-root-filesystem-false: ''
+        container.kubeaudit.io/neo4j.allow-capability-dac-override: ''
+    spec:
+      {{- if $.Values.global.securityContext.enabled }}
+      securityContext:
+        fsGroup: 10001
+        runAsUser: 10001
+        runAsGroup: 10001
+      {{- end }}
+      {{- if $.Values.global.neo4j.podAntiAffinityEnabled }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: statefulset.kubernetes.io/pod-name
+                    operator: In
+                    values:
+                      - neo4j-0
+                      - neo4j-1
+                      - neo4j-2
+              topologyKey: "kubernetes.io/hostname"
+      {{- end }}
+      serviceAccountName: neo4j-sa
+      terminationGracePeriodSeconds: 10
+      {{- if $.Values.global.registry.pullSecret }}
+      imagePullSecrets:
+        - name: {{ $.Values.global.registry.pullSecret }}
+      {{- end }}
+      initContainers:
+        - name: register-db-service
+          image: {{ $.Values.global.registry.url }}/{{ $.Values.global.images.repo }}/{{ $.Values.global.images.controlClient.name }}:{{ $.Values.global.images.controlClient.tag }}
+          imagePullPolicy: {{ $.Values.global.images.policy }}
+          {{- if $.Values.global.securityContext.enabled }}
+          securityContext:
+            runAsGroup: 10001
+            runAsUser: 10001
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            privileged: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          {{- end }}
+          args: [ "db_service", "{{ $.Values.global.neo4j.instances }}" ]
+          # optimization - Neo4j-statefulset: investigate if should be refactored to a Job
+          # https://jira-oss.seli.wh.rnd.internal.ericsson.com/browse/TORF-656226
+          # optimization - ControlRestClient: allow client to sleep when required
+          # https://jira-oss.seli.wh.rnd.internal.ericsson.com/browse/TORF-656230
+          command:
+            - "/bin/bash"
+            - "-c"
+            - |
+              java -cp load-testing-control-client.jar com.ericsson.oss.itpf.datalayer.dps.generator.control.client.ControlRestClient db_service "{{ $.Values.global.neo4j.instances }}"
+              exit_code=$?
+              if [[ "${exit_code}" -ne 0 ]]; then
+                echo "Load-control indicated Neo4j cannot start, blocking the init-container..."
+                sleep infinity
+              fi
+      containers:
+        - name: neo4j
+          image: {{ $.Values.global.registry.url }}/{{ $.Values.global.images.repo }}/{{ $.Values.global.images.neo4j.name }}:{{ $.Values.global.images.neo4j.tag }}
+          imagePullPolicy: {{ $.Values.global.images.policy }}
+          command:
+            - "/bin/bash"
+            - "-c"
+            - |
+              {{- if $.Values.global.neo4j.isStandalone }}
+                FULL_HOSTNAME=$(hostname -f)                                                  # e.g. neo4j-0.neo4j.namespace.svc.cluster.local
+                THIS_INSTANCE_ID=$(hostname | awk -F '-' '{print $2}')
+                DISCOVERY_ADDRESS="neo4j-discovery-${THIS_INSTANCE_ID}.${FULL_HOSTNAME:14}"   # e.g. neo4j-discovery-0.namespace.svc.cluster.local
+
+                export NEO4J_dbms_default__advertised__address=${FULL_HOSTNAME}
+                export NEO4J_causal__clustering_discovery__advertised__address=${DISCOVERY_ADDRESS}:5000
+                export NEO4J_causal__clustering_transaction__advertised__address=${DISCOVERY_ADDRESS}:6000
+                export NEO4J_causal__clustering_raft__advertised__address=${DISCOVERY_ADDRESS}:7000
+
+                /var/lib/neo4j/bin/neo4j-admin set-initial-password "test"
+
+                # init the Neo4j Docker image inside this container (-g groups all child processes together)
+                exec /usr/bin/tini -g -- /docker-entrypoint.sh "neo4j"
+              {{- else }}
+                # Set the initial password and copy it over to the data directory configured by the ADP image.
+                source /ericsson/3pp/neo4j/conf/neo4j_env
+                /ericsson/3pp/neo4j/bin/neo4j-admin set-initial-password "test"
+                mkdir -p /data/dbms
+                cp /ericsson/neo4j_data/dbms/auth.ini /data/dbms/
+
+                # init the Neo4j Docker image inside this container (-g groups all child processes together)
+                exec /tini -s -g -- /opt/ericsson/neo4j/service/d3/entrypoint.sh
+              {{- end }}
+          ports:
+            - containerPort: 7687
+              name: bolt
+            - containerPort: 7474
+              name: http
+            - containerPort: 5000
+              name: discovery
+            - containerPort: 6000
+              name: transaction
+            - containerPort: 7000
+              name: raft
+            - containerPort: 2004
+              name: prometheus
+          env:
+            - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
+              value: "yes"
+            - name: NEO4J_dbms_mode
+              value: {{ $.Values.global.neo4j.mode }}
+            - name: NEO4J_dbms_default__listen__address
+              value: "0.0.0.0"
+            - name: NEO4J_dbms_connector_bolt_enabled
+              value: "true"
+            - name: NEO4J_dbms_connector_bolt_listen__address
+              value: "0.0.0.0:7687"
+            - name: NEO4J_dbms_connector_bolt_advertised__address
+              value: ":7687"
+            - name: NEO4J_dbms_connector_http_enabled
+              value: "true"
+            - name: NEO4J_dbms_connector_http_listen__address
+              value: "0.0.0.0:7474"
+            - name: NEO4J_dbms_connector_http_advertised__address
+              value: ":7474"
+            - name: NEO4J_dbms_connector_https_enabled
+              value: "false"
+            - name: NEO4J_dbms_security_auth__enabled
+              value: "true"
+            - name: NEO4J_dbms_security_procedures_unrestricted
+              value: "ericsson.driver.*"
+            - name: NEO4J_dbms_unmanaged__extension__classes
+              value: "com.ericsson.oss.itpf.datalayer.dps.neo4j.driver.transport.bolt.extension=/boltext"
+            - name: NEO4J_dbms_default__database
+              value: "dps"
+            - name: NEO4J_dbms_memory_pagecache_warmup_preload
+              value: {{ .Values.global.neo4j.env.cacheWarmupEnable | quote }}
+            - name: NEO4J_dbms_memory_pagecache_warmup_enable
+              value: {{ .Values.global.neo4j.env.cacheWarmupEnable | quote }}
+            - name: NEO4J_dbms_logs_debug_level
+              value: "INFO"
+            - name: NEO4J_dbms_logs_debug_rotation_size
+              value: "20m"
+            - name: NEO4J_dbms_logs_debug_rotation_keep__number
+              value: "50"
+            - name: NEO4J_dbms_logs_query_enabled
+              value: "INFO"
+            - name: NEO4J_dbms_logs_query_threshold
+              value: "5s"
+            - name: NEO4J_dbms_logs_query_page__logging__enabled
+              value: "true"
+            - name: NEO4J_dbms_logs_query_allocation__logging__enabled
+              value: "true"
+            - name: NEO4J_dbms_logs_query_rotation_size
+              value: "20m"
+            - name: NEO4J_dbms_logs_query_rotation_keep__number
+              value: "50"
+            - name: NEO4J_dbms_logs_query_parameter__logging__enabled
+              value: "false"
+            - name: NEO4J_dbms_logs_query_time__logging__enabled
+              value: "true"
+            - name: NEO4J_dbms_logs_gc_enabled
+              value: "true"
+            - name: NEO4J_dbms_logs_gc_rotation_size
+              value: "20m"
+            - name: NEO4J_dbms_logs_gc_rotation_keep__number
+              value: "5"
+            - name: NEO4J_dbms_transaction_bookmark__ready__timeout
+              value: "5s"
+            - name: NEO4J_dbms_transaction_timeout
+              value: "10m"
+            - name: NEO4J_dbms_tx__state_memory__allocation
+              value: "ON_HEAP"
+            - name: NEO4J_dbms_connector_bolt_thread__pool__keep__alive
+              value: "5m"
+            - name: NEO4J_causal__clustering_discovery__type
+              value: "K8S"
+            - name: NEO4J_causal__clustering_kubernetes_service__port__name
+              value: "discovery"
+            - name: NEO4J_causal__clustering_kubernetes_label__selector
+              value: "neo4j-cluster=load-test-fwk"
+            - name: NEO4J_causal__clustering_minimum__core__cluster__size__at__formation
+              value: "3"
+            - name: NEO4J_causal__clustering_minimum__core__cluster__size__at__runtime
+              value: "3"
+            - name: NEO4J_dbms_routing__ttl
+              value: "60s"
+            - name: NEO4J_dbms_connector_bolt_connection__keep__alive__for__requests
+              value: "OFF" # avoid bug in KEEP_ALIVE server feature in 4.4.11, see https://support.neo4j.com/hc/en-us/requests/21033
+            # Required properties for the ADP image configuration generation script.
+            - name: DUMPS_PATH
+              value: "/data/dumps/"
+            - name: MAX_DIRECT_MEMORY_SIZE
+              value: "{{ $.Values.global.neo4j.env.max_direct_memory }}"
+            - name: NEO4J_SERVICE_NAME
+              value: "neo4j"
+            - name: RELEASE_NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+            - name: NEO4J_BOLT_PORT
+              value: "7687"
+            - name: NEO4J_HTTP_PORT
+              value: "7474"
+            - name: NEO4J_HTTPS_PORT
+              value: "7473"
+            - name: NEO4J_DISCOVERY_PORT
+              value: "5000"
+            - name: NEO4J_RAFT_PORT
+              value: "7000"
+            - name: NEO4J_TX_PORT
+              value: "6000"
+            - name: AUTH_ENABLED
+              value: "true"
+            - name: NEO4J_dbms_connector_bolt_thread__pool__max__size
+              value: "{{ $.Values.global.neo4j.env.connector_bolt_thread_pool_max_size }}"
+            - name: NEO4J_dbms_connector_bolt_thread__pool__min__size
+              value: "{{ $.Values.global.neo4j.env.connector_bolt_thread_pool_min_size }}"
+            - name: NEO4J_dbms_transaction_concurrent_maximum
+              value: "{{ $.Values.global.neo4j.env.transaction_concurrent_max }}"
+            - name: NEO4J_metrics_filter
+              value: "*"
+            - name: NEO4J_metrics_prometheus_enabled
+              value: {{ .Values.global.monitoring.metricsEnabled | quote }}
+            - name: NEO4J_metrics_prometheus_endpoint
+              value: "0.0.0.0:2004"
+            - name: NEO4J_dps_metrics_prometheus
+              value: {{ .Values.global.monitoring.metricsEnabled | quote }}
+            - name: NEO4J_db_checkpoint_iops_limit
+              value: "{{ $.Values.global.neo4j.env.iops_limit }}"
+            - name: NEO4J_server_memory_heap_initial__size
+              value: {{ $.Values.global.neo4j.env.heap_size }}
+            - name: NEO4J_server_memory_heap_max__size
+              value: {{ $.Values.global.neo4j.env.heap_size }}
+            - name: NEO4J_dbms_memory_pagecache_size
+              value: {{ $.Values.global.neo4j.env.pagecache_size }}
+            - name: NEO4J_dbms_logs_query_transaction_enabled
+              value: "OFF"
+            # Our own properties.
+            - name: FINAL_REPORT_DELAY
+              value: "{{ $.Values.global.neo4j.env.final_report_delay }}"
+          volumeMounts:
+            - name: neo4j-pvc-data
+              # Can mount into different /data than the populator as the Neo4j Docker image will use that when detected.
+              mountPath: /data
+          {{- if not $.Values.global.ignoreResources }}
+          resources:
+            requests:
+              memory: {{ $.Values.global.neo4j.requests.memory }}
+              cpu: {{ $.Values.global.neo4j.requests.cpu }}
+            limits:
+              memory: {{ $.Values.global.neo4j.limits.memory }}
+              cpu: {{ $.Values.global.neo4j.limits.cpu }}
+          {{- end }}
+          {{- if $.Values.global.securityContext.enabled }}
+          securityContext:
+            runAsGroup: 10001
+            runAsUser: 10001
+            runAsNonRoot: true
+            readOnlyRootFilesystem: false
+            privileged: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - DAC_OVERRIDE
+          {{- end }}
+  # The PVC templates are defined in neo4j_volumes.yaml.
+  # With volumeClaimTemplates, the StatefulSet controller will map the pod identities to the relevant existing claims. E.g.
+  # <PVC-name>-<pod-identity> = neo4j-pvc-data-neo4j-0
+  volumeClaimTemplates:
+    - metadata:
+        name: neo4j-pvc-data

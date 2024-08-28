@@ -1,0 +1,21 @@
+# can use this to copy the log files from the PVC if needed
+# kubectl cp log-inspector:generators/logs/{gen-name}/load-generator.log ./read.log
+# or simply access it directly
+# kubectl exec -it log-inspector -- sh
+apiVersion: v1
+kind: Pod
+metadata:
+  name: log-inspector
+spec:
+  containers:
+  - name: inspect-neo4j-pv
+    image: armdocker.rnd.ericsson.se/proj_oss_releases/test-ubuntu
+    command: ["tail"]
+    args: ["-f", "/dev/null"]
+    volumeMounts:
+    - mountPath: "/generators"
+      name: pvc-data
+  volumes:
+  - name: pvc-data
+    persistentVolumeClaim:
+      claimName: load-profiles

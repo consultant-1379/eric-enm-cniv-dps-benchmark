@@ -1,0 +1,98 @@
+global:
+  cnivAgent:
+    enabled: false
+  securityContext:
+    enabled: false
+  load:
+    type: ENM_23.3_Small_Cloud_Native
+    profiles: 2
+  registry:
+    url: local
+  # tag the images locally with the following - local/repo/<name>:<tag>
+  images:
+    repo: repo
+    policy: Never
+    neo4j:
+      name: eric-enm-neo4j
+      tag: 4.4.11-enterprise
+    neo4jPopulator:
+      name: eric-neo4j-populator
+      tag: latest
+    neo4jLoadProfiles:
+      name: neo4j-load-profiles
+    loadGenerator:
+      name: eric-neo4j-load-generator
+      tag: latest
+    controlClient:
+      name: eric-load-control-client
+      tag: latest
+    controlServer:
+      name: eric-load-control-service
+      tag: latest
+    loadTestFramework:
+      name: eric-dps-ltf
+      tag: latest
+  neo4j:
+    rebuild: false
+    instances: 1
+    mode: single
+    requests:
+      memory: 256M
+      cpu: 0.5
+    env:
+      heap_size: "1g"
+      pagecache_size: "1g"
+    podAntiAffinityEnabled: false
+  monitoring:
+    metricsEnabled: true
+    persistPrometheus: true
+  populator:
+    concurrent:
+      workers: 7
+
+eric-neo4j-load-test-fwk-load-generator:
+  load:
+    generator:
+      extendedProperties:
+        - task.execution.threads=10
+        - task.retry.delay.initial=1000
+        - task.retry.attempts=3
+        - task.ignore.fatal.errors=false
+        - task.retry.delay.factor=5
+        - generator.start.minute=1
+        - generator.end.minute=5
+        - preferred.load.profiles=mspm-00;mspm-01
+    java:
+      debugPort: 5005
+
+eric-neo4j-load-test-fwk-data-populator:
+  load:
+    neo4j:
+      templateProperties:
+        ENM_23.3_Small_Cloud_Native:
+          - nodeType=startId;noOfMibs
+          - RadioNode_18_Q3_R49A16=1;10
+          - RadioNode_18_Q4_R57A02=1;10
+    java:
+      debugPort: 5006
+
+eric-neo4j-load-test-fwk-load-control:
+  progress:
+    reporting:
+      interval: 30
+    queueThreshold: 10
+  registration:
+    timeout: 120
+  timeout:
+    populator: 180
+    database:
+      start: 200
+      warmup: 30
+    generator: 100
+
+# Needs to override the setting configured in the default values.
+eric-neo4j-load-test-fwk-build-utility:
+  buildUtilityEnabled: false
+
+tags:
+  validate: true

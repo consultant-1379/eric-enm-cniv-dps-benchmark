@@ -1,0 +1,5 @@
+apiVersion: v2
+name: eric-neo4j-load-test-fwk-build-utility
+description: A utility used when building the Neo4j Load Testing Framework into a CSAR
+type: application
+version: 0.1.1

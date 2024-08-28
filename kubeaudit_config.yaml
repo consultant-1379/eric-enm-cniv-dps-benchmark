@@ -1,0 +1,45 @@
+#
+# COPYRIGHT Ericsson 2024
+#
+#
+#
+# The copyright to the computer program(s) herein is the property of
+#
+# Ericsson Inc. The programs may be used and/or copied only with written
+#
+# permission from Ericsson Inc. or in accordance with the terms and
+#
+# conditions stipulated in the agreement/contract under which the
+#
+# program(s) have been supplied.
+#
+
+Kubeaudit:
+  Product: "${common.helm-chart-name}"
+  Product_contact: 'PDLTORDATA@pdl.internal.ericsson.com'
+  ClusterMode:
+    Scan: False
+    KubeconfigFile: "config"
+    Namespace: "default"
+    AuditPickerFile: ""
+    Autofix : False
+    AutofixedFile: "fixed_conf"
+    ReportFormat: 'json'
+    DisplayReportConsole: True
+  ManifestMode:
+    Scan: True
+    armLinks:
+      Links:
+      valuesOverride:
+    AuditPickerFile: ""
+    offlineArtifacts:
+      name:
+      valuesOverride:
+    Autofix : False
+    AutofixDir: "fixed"
+    ReportFormat: 'json'
+    DisplayReportConsole: True
+  CustomRun:
+    Scan: False
+    Parameters: "all -c /opt/va-scan-kubeaudit/conf/admin.conf"
+    DisplayReportConsole: True

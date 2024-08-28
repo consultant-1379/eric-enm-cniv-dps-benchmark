@@ -1,0 +1,47 @@
+{{ range $i := until (int $.Values.load.generator.instances) }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: load-generator-test-{{ $i }}
+  labels:
+    benchmarkName: {{ $.Chart.Name }}
+    benchmarkgroup: {{ $.Values.load.benchmarkgroup }}
+  annotations:
+    "helm.sh/hook": test
+spec:
+  template:
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: load-generator-test
+          image: busybox:latest
+          command:
+            - "/bin/sh"
+            - "-c"
+            - |
+              function test_property() {
+                  if grep -q "$1" $CONFIG_FILE_LOCATION; then
+                      echo "$1 - OK"
+                  else
+                      echo "$1 - failed"
+                      exit 1
+                  fi
+              }
+              {{- range $.Values.load.generator.properties }}
+              test_property {{.}}
+              {{- end }}
+              exit 0
+          env:
+            - name: CONFIG_FILE_LOCATION
+              value: /config/generator.properties
+          volumeMounts:
+            - name: config-properties
+              mountPath: /config
+      restartPolicy: Never
+      volumes:
+        - name: config-properties
+          configMap:
+            name: load-generator-cm
+  backoffLimit: 4
+---
+{{- end }}

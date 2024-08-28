@@ -1,0 +1,12 @@
+apiVersion: v1
+data:
+  generator.properties: |
+    {{- range $value := .Values.load.generator.properties }}
+    {{ tpl $value $ }}
+    {{- end }}
+    {{- range $value := .Values.load.generator.extendedProperties }}
+    {{ tpl $value $ }}
+    {{- end }}
+kind: ConfigMap
+metadata:
+  name: load-generator-cm

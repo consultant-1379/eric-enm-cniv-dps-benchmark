@@ -1,0 +1,98 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: neo4j-load-generator
+spec:
+  ttlSecondsAfterFinished: {{ $.Values.load.generator.generatorPodTtlAfterFinished }}
+  template:
+    metadata:
+      labels:
+        container.kubeaudit.io/load-generator.allow-read-only-root-filesystem-false: ""
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "2004"
+    spec:
+      automountServiceAccountToken: false
+      {{- if $.Values.global.securityContext.enabled }}
+      securityContext:
+        fsGroup: 10001
+        runAsUser: 10001
+        runAsGroup: 10001
+      {{- end }}
+      {{- if $.Values.global.registry.pullSecret }}
+      imagePullSecrets:
+        - name: {{ $.Values.global.registry.pullSecret }}
+      {{- end }}
+      initContainers:
+        - name: init-load-generator
+          image: {{ $.Values.global.registry.url }}/{{ $.Values.global.images.repo }}/{{ $.Values.global.images.controlClient.name }}:{{ $.Values.global.images.controlClient.tag }}
+          {{- if $.Values.global.securityContext.enabled }}
+          securityContext:
+            readOnlyRootFilesystem: true
+            privileged: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          {{- end }}
+          imagePullPolicy: {{ $.Values.global.images.policy }}
+          args: [ "load_generator", "{{ $.Values.global.load.profiles }}" ]
+      containers:
+        - name: load-generator
+          image: {{ $.Values.global.registry.url }}/{{ $.Values.global.images.repo }}/{{ $.Values.global.images.loadGenerator.name }}:{{ $.Values.global.images.loadGenerator.tag }}
+          imagePullPolicy: {{ $.Values.global.images.policy }}
+          env:
+            - name: CONFIG_FILE_LOCATION
+              value: /config/generator.properties
+            - name: NODE_TEMPLATES_LOCATION
+              value: /framework_data/files/templates
+            - name: LOG_DIR
+              value: /framework_data/logs
+          {{- if $.Values.load.java.debugPort }}
+            - name: JAVA_OPTS
+              value: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:{{ $.Values.load.java.debugPort }}"
+          {{- end }}
+          ports:
+          {{- if $.Values.load.java.debugPort }}
+            - containerPort: {{ $.Values.load.java.debugPort }}
+              name: "jvm-debug"
+          {{- end }}
+          {{- if $.Values.global.monitoring.metricsEnabled }}
+            - containerPort: 2004
+              name: "metrics"
+          {{- end }}
+          volumeMounts:
+            # The mountPath for this volume has to be the same as it is in the populator-job, so that the generators can retrieve the load profile files based on their path present in the DB.
+            - name: nfs-profile
+              mountPath: /framework_data
+            - name: config-properties
+              mountPath: /config
+          {{- if and (eq $.Values.global.ignoreResources false) (eq $.Values.load.generator.ignoreResources false) }}
+          resources:
+            requests:
+              memory: {{ $.Values.load.requests.memory }}
+              cpu: {{ $.Values.load.requests.cpu }}
+            limits:
+              memory: {{ $.Values.load.limits.memory }}
+              cpu: {{ $.Values.load.limits.cpu }}
+          {{- end }}
+          {{- if $.Values.global.securityContext.enabled }}
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+          {{- end }}
+      terminationGracePeriodSeconds: 90
+      restartPolicy: Never
+      volumes:
+        - name: nfs-profile
+          persistentVolumeClaim:
+            claimName: load-profiles
+        - name: config-properties
+          configMap:
+            name: load-generator-cm
+  backoffLimit: 0
+  parallelism: {{ $.Values.global.load.profiles }}

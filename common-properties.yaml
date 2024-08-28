@@ -1,0 +1,33 @@
+modelVersion: 2.0
+properties:
+  - image-registry: armdocker.rnd.ericsson.se
+  - image-repo: proj-eric-oss-cniv/proj-eric-oss-cniv-drop
+  - internal-image-repo: proj-eric-oss-cniv/proj-eric-oss-cniv-ci-internal
+  - helm-chart-name: eric-neo4j-load-test-fwk
+  - helm-chart-release-repo: https://arm.epk.ericsson.se/artifactory/proj-eric-oss-cniv-drop-helm/eric-neo4j-load-test-fwk/
+  - helm-chart-snapshot-repo: https://arm.epk.ericsson.se/artifactory/proj-eric-oss-cniv-ci-internal-helm/eric-neo4j-load-test-fwk/
+
+  - base-image-name: eric-dps-ltf
+  - neo4j-image-name: eric-enm-neo4j
+  - neo4j-populator-image-name: eric-neo4j-populator
+  - neo4j-load-profiles-image-name: eric-neo4j-load-profiles
+  - metric-load-generator-image-name: eric-neo4j-load-generator
+  - load-control-client-image-name: eric-load-control-client
+  - load-control-service-image-name: eric-load-control-service
+
+  - charts-location: eric-neo4j-load-test-fwk/charts
+  - build-utility-chart: eric-neo4j-load-test-fwk-build-utility
+  - populator-chart: eric-neo4j-load-test-fwk-data-populator
+  - load-control-chart: eric-neo4j-load-test-fwk-load-control
+  - load-generator-chart: eric-neo4j-load-test-fwk-load-generator
+  - neo4j-chart: eric-neo4j-load-test-fwk-neo4j
+
+  - base-path: docker_cniv/base
+  - neo4j-path: docker_cniv/neo4j
+  - neo4j-populator-path: docker_cniv/neo4j-populator
+  - neo4j-load-profiles-path: docker_cniv/neo4j-load-profiles
+  - load-generator-path: docker_cniv/load-generator
+  - load-control-client-path: docker_cniv/load-control-client
+  - load-control-service-path: docker_cniv/load-control-service
+
+  - load-image-tag: ENM_24_3_Extra_Large_Cloud_Native

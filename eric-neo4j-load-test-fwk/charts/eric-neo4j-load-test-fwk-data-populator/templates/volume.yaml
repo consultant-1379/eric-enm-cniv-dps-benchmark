@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    app: neo4j
+    neo4j-cluster: profiles
+  name: load-profiles
+spec:
+  storageClassName: {{ $.Values.global.persistentVolumeClaim.storageClass.file }}
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: {{ $.Values.global.persistentVolumeClaim.sfs.storage }}
+  volumeMode: Filesystem

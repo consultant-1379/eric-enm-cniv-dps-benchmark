@@ -1,0 +1,107 @@
+global:
+  load:
+    type: ENM_24_2_Extra_Large_Cloud_Native
+    profiles: 302
+  persistentVolumeClaim:
+    storageClass:
+      file: erikube-nfs
+      block: ieat3par-12
+    sfs:
+      storage: 20Gi
+    neo4j:
+      storage: 400Gi
+  ignoreResources: false
+  registry:
+    url: armdocker.rnd.ericsson.se
+  images:
+    repo: proj-eric-oss-cniv/proj-eric-oss-cniv-drop
+    policy: Always
+    neo4j:
+      name: eric-enm-neo4j
+      tag: latest
+    neo4jPopulator:
+      name: eric-neo4j-populator
+      tag: latest
+    neo4jLoadProfiles:
+      name: eric-neo4j-load-profiles
+    loadGenerator:
+      name: eric-neo4j-load-generator
+      tag: latest
+    controlClient:
+      name: eric-load-control-client
+      tag: latest
+    controlServer:
+      name: eric-load-control-service
+      tag: latest
+    loadTestFramework:
+      name: eric-dps-ltf
+      tag: latest
+  populator:
+    concurrent:
+      workers: 20
+  # the values for the memory and cpu are derived from the RCD tool for Extra Large Cloud Native ENM https://resourceconfigurationdata.internal.ericsson.com:8888/#/deploymentsetup
+  neo4j:
+    requests:
+      memory: 245920Mi
+      cpu: 9700m
+    limits:
+      memory: 246020Mi
+      cpu: 32200m
+    env:
+      connector_bolt_thread_pool_min_size: 1800
+      connector_bolt_thread_pool_max_size: 1800
+      transaction_concurrent_max: 2000
+      heap_size: "48g"
+      pagecache_size: "140g"
+      iops_limit: 5000
+      final_report_delay: 0
+      max_direct_memory: "12g"
+
+eric-neo4j-load-test-fwk-load-generator:
+  load:
+    generator:
+      extendedProperties:
+        - generator.start.minute=3600
+        - generator.end.minute=3780
+        - task.ignore.fatal.errors=false
+        - task.execution.threads=5
+        - task.queue.threshold=60000
+        - custom.execution.threads.said=20
+        - custom.execution.threads.cellserv=45
+        - custom.execution.threads.cmserv=10
+        - custom.execution.threads.mscmce=60
+        - custom.execution.threads.ebsstreamtopology=20
+        - custom.execution.threads.eventbasedclient=20
+        - custom.execution.threads.fmalarmprocessing=20
+        - custom.execution.threads.fmhistory=10
+        - custom.execution.threads.fmserv=10
+        - custom.execution.threads.netex=10
+        - custom.execution.threads.lcmserv=10
+        - custom.execution.threads.mspm=55
+        - custom.execution.threads.mspmip=10
+        - custom.execution.threads.mssnmpcm=20
+        - custom.execution.threads.pmserv=30
+        - custom.execution.threads.saserv=20
+        - custom.execution.threads.ipsmserv=25
+        - custom.execution.threads.shmcoreserv=55
+        - custom.execution.threads.shmserv=10
+        - generator.operation.cache.size=5
+        - generator.max.query.size=50000
+        - generator.write.load.disabled=false
+    requests:
+      memory: 2G
+      cpu: 1
+    limits:
+      memory: 4G
+      cpu: 2
+
+# Needs to override the setting configured in the default values.
+eric-neo4j-load-test-fwk-build-utility:
+  buildUtilityEnabled: false
+
+eric-neo4j-load-test-fwk-load-control:
+  timeout:
+    populator: 57600
+    database:
+      start: 2700
+      warmup: 600

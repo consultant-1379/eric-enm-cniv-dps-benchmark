@@ -1,0 +1,59 @@
+global:
+  cnivAgent:
+    enabled: false
+  load:
+    type: ENM_24_3_Small_Cloud_Native
+    profiles: 5
+  persistentVolumeClaim:
+    storageClass:
+      file: network-file
+      block: network-block
+    neo4j:
+      storage: 60Gi
+  ignoreResources: true
+  registry:
+    url: armdocker.rnd.ericsson.se
+  images:
+    repo: proj-eric-oss-cniv/proj-eric-oss-cniv-ci-internal
+    policy: Always
+    neo4j:
+      name: eric-enm-neo4j
+      tag: latest
+    neo4jPopulator:
+      name: eric-neo4j-populator
+      tag: latest
+    neo4jLoadProfiles:
+      name: eric-neo4j-load-profiles
+    loadGenerator:
+      name: eric-neo4j-load-generator
+      tag: latest
+    controlClient:
+      name: eric-load-control-client
+      tag: latest
+    controlServer:
+      name: eric-load-control-service
+      tag: latest
+    loadTestFramework:
+      name: eric-dps-ltf
+      tag: latest
+  populator:
+    concurrent:
+      workers: 7
+
+eric-neo4j-load-test-fwk-load-generator:
+  load:
+    generator:
+      extendedProperties:
+        - task.execution.threads=20
+        - generator.start.minute=1
+        - generator.end.minute=3
+        - task.ignore.fatal.errors=false
+
+eric-neo4j-load-test-fwk-load-control:
+  progress:
+    reporting:
+      interval: 60
+
+# Needs to override the setting configured in the default values.
+eric-neo4j-load-test-fwk-build-utility:
+  buildUtilityEnabled: false

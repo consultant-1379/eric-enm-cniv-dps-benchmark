@@ -1,0 +1,12 @@
+# can use this to inspect the load profiles file system without starting a component
+# kubectl exec -it lp-inspector -- sh 
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lp-inspector
+spec:
+  containers:
+  - name: inspect-load-profiles
+    image: armdocker.rnd.ericsson.se/proj_oss_releases/neo4j-load-profiles:ENM_23.1_Small_Cloud_Native
+    command: ["tail"]
+    args: ["-f", "/dev/null"]

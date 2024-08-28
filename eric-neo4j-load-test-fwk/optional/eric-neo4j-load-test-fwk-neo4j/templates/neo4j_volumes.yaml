@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: neo4j-pvc-data-neo4j-0
+  labels:
+    app: neo4j
+    neo4j-cluster: load-test-fwk
+spec:
+  storageClassName: {{ $.Values.global.persistentVolumeClaim.storageClass.block }}
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ $.Values.global.persistentVolumeClaim.neo4j.storage }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: neo4j-pvc-data-neo4j-1
+  labels:
+    app: neo4j
+    neo4j-cluster: load-test-fwk
+spec:
+  storageClassName: {{ $.Values.global.persistentVolumeClaim.storageClass.block }}
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ $.Values.global.persistentVolumeClaim.neo4j.storage }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: neo4j-pvc-data-neo4j-2
+  labels:
+    app: neo4j
+    neo4j-cluster: load-test-fwk
+spec:
+  storageClassName: {{ $.Values.global.persistentVolumeClaim.storageClass.block }}
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ $.Values.global.persistentVolumeClaim.neo4j.storage }}

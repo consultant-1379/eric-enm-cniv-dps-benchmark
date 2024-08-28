@@ -1,0 +1,461 @@
+modelVersion: 2.0
+
+description: "ENM: CMService Service Group Pipeline"
+
+docker:
+  registry: https://armdocker.rnd.ericsson.se/proj-eric-oss-cniv/proj-eric-oss-cniv-drop
+
+docker-images:
+  - adp-release-auto: armdocker.rnd.ericsson.se/sandbox/adp-staging/adp-cicd/bob-adp-release-auto:latest
+  - trivy-inline-scan: armdocker.rnd.ericsson.se/proj-adp-cicd-drop/trivy-inline-scan:latest
+  - grype-scan: armdocker.rnd.ericsson.se/proj-adp-cicd-drop/va-image-scanning-grype:latest
+  - adp-image-dr-check: armdocker.rnd.ericsson.se/proj-adp-cicd-drop/adp-image-dr-check:latest
+  - hadolint-scan: armdocker.rnd.ericsson.se/proj-adp-cicd-drop/hadolint-scan:latest
+  - va-scan-kubeaudit: armdocker.rnd.ericsson.se/proj-adp-cicd-drop/va-scan-kubeaudit:latest
+  - va-scan-kubesec: armdocker.rnd.ericsson.se/proj-adp-cicd-drop/va-scan-kubesec:latest
+
+import:
+  common: common-properties.yaml
+
+env:
+  - PWD
+  - RELEASE (default=true)
+  # The default token is one that is used by any job that pushes to the Helm repository. It corresponds to the user "lciadm100". Changing the token
+  # necessitates a user change also.
+  - HELM_REPO_USER (default=lciadm100)
+  - HELM_REPO_TOKEN (default=cmVmdGtuOjAxOjE3NDA2MjgyODE6ajZNQXhZSHRTbW5wVm8xNUpkZ0JUMkh6aThh)
+  - GIT_COMMITTER_NAME
+  - GIT_COMMITTER_EMAIL
+  - ENABLE_HELM_V3 (default=true)
+
+var:
+  - work-dir
+  - version
+  - image-repo
+  - base-image-path
+  - neo4j-image-path
+  - neo4j-populator-image-path
+  - neo4j-load-profiles-image-path
+  - load-image-tag
+  - metric-load-generator-image-path
+  - load-control-client-image-path
+  - load-control-service-image-path
+  - cbos-version
+  - helm-chart-repo
+  - helm-chart-name
+  - image-registry
+  - created
+  - commithash
+  - base-path
+  - neo4j-path
+  - neo4j-populator-path
+  - neo4j-load-profiles-path
+  - load-generator-path
+  - load-control-client-path
+  - load-control-service-path
+
+rules:
+  clean:
+    - task: rm
+      cmd:
+        - rm -rf .bob/
+        - rm -rf build/
+        - rm -rf test-output/
+        - rm -rf trivy/
+    - task: docker
+      cmd:
+        - docker system prune --volumes --all --force
+        - docker system prune -af
+
+  set-working-directory:
+    - task: set-working-directory
+      cmd: pwd > .bob/var.work-dir
+
+  prepare-cniv-dockerfile-paths:
+    - task: prepare-base-path
+      cmd: echo "${common.base-path}"  > .bob/var.base-path
+    - task: prepare-neo4j-path
+      cmd: echo "${common.neo4j-path}"  > .bob/var.neo4j-path
+    - task: prepare-neo4j-populator-path
+      cmd: echo "${common.neo4j-populator-path}"  > .bob/var.neo4j-populator-path
+    - task: prepare-neo4j-load-profiles-path
+      cmd: echo "${common.neo4j-load-profiles-path}"  > .bob/var.neo4j-load-profiles-path
+    - task: prepare-load-generator-path
+      cmd: echo "${common.load-generator-path}"  > .bob/var.load-generator-path
+    - task: prepare-load-control-client-path
+      cmd: echo "${common.load-control-client-path}"  > .bob/var.load-control-client-path
+    - task: prepare-load-control-service-path
+      cmd: echo "${common.load-control-service-path}"  > .bob/var.load-control-service-path
+
+  prepare-snapshot-build:
+    - task: generate-version
+      docker-image: adp-release-auto
+      cmd: generate-version --is-release false --output version
+    - task: image-registry-path
+      cmd: echo "${common.image-registry}"  > .bob/var.image-registry
+    - task: image-repopath
+      cmd: echo "${common.internal-image-repo}"  > .bob/var.image-repo
+    - task: helm-chart-repopath
+      cmd: echo "${common.helm-chart-snapshot-repo}"  > .bob/var.helm-chart-repo
+    - task: helm-chart-name
+      cmd: echo "${common.helm-chart-name}" > .bob/var.helm-chart-name
+
+  prepare-release-build:
+    - task: generate-version
+      docker-image: adp-release-auto
+      cmd: generate-version --is-release true --output version
+    - task: image-registry-path
+      cmd: echo "${common.image-registry}"  > .bob/var.image-registry
+    - task: image-repopath
+      cmd: echo "${common.image-repo}"  > .bob/var.image-repo
+    - task: helm-chart-repopath
+      cmd: echo "${common.helm-chart-release-repo}"  > .bob/var.helm-chart-repo
+    - task: helm-chart-name
+      cmd: echo "${common.helm-chart-name}" > .bob/var.helm-chart-name
+
+  prepare-docker-image-paths:
+    - task: base-image-path
+      cmd: echo "${var.image-registry}/${var.image-repo}/${common.base-image-name}"  > .bob/var.base-image-path
+    - task: neo4j-image-path
+      cmd: echo "${var.image-registry}/${var.image-repo}/${common.neo4j-image-name}"  > .bob/var.neo4j-image-path
+    - task: neo4j-populator-image-path
+      cmd: echo "${var.image-registry}/${var.image-repo}/${common.neo4j-populator-image-name}"  > .bob/var.neo4j-populator-image-path
+    - task: neo4j-load-profiles-image-path
+      cmd: echo "${var.image-registry}/${var.image-repo}/${common.neo4j-load-profiles-image-name}"  > .bob/var.neo4j-load-profiles-image-path
+    - task: neo4j-load-profiles-image-tag
+      cmd: echo "${common.load-image-tag}" > .bob/var.load-image-tag
+    - task: metric-load-generator-image-path
+      cmd: echo "${var.image-registry}/${var.image-repo}/${common.metric-load-generator-image-name}"  > .bob/var.metric-load-generator-image-path
+    - task: load-control-client-image-path
+      cmd: echo "${var.image-registry}/${var.image-repo}/${common.load-control-client-image-name}"  > .bob/var.load-control-client-image-path
+    - task: load-control-service-image-path
+      cmd: echo "${var.image-registry}/${var.image-repo}/${common.load-control-service-image-name}"  > .bob/var.load-control-service-image-path
+    - task: prepare-arguments
+      cmd:
+        - date +"%Y-%m-%dT%H:%M:%S.%2NZ" > .bob/var.created
+        - git rev-parse --short HEAD > .bob/var.commithash
+
+  lint-dockerfile:
+    - task: dockerfile-lint
+      cmd:
+        - docker run --workdir ${var.work-dir} --rm -i hadolint/hadolint < ${var.work-dir}/${var.neo4j-path}/Dockerfile
+        - docker run --workdir ${var.work-dir} --rm -i hadolint/hadolint < ${var.work-dir}/${var.neo4j-populator-path}/Dockerfile
+        - docker run --workdir ${var.work-dir} --rm -i hadolint/hadolint < ${var.work-dir}/${var.neo4j-load-profiles-path}/Dockerfile
+        - docker run --workdir ${var.work-dir} --rm -i hadolint/hadolint < ${var.work-dir}/${var.load-generator-path}/Dockerfile
+        - docker run --workdir ${var.work-dir} --rm -i hadolint/hadolint < ${var.work-dir}/${var.load-control-client-path}/Dockerfile
+        - docker run --workdir ${var.work-dir} --rm -i hadolint/hadolint < ${var.work-dir}/${var.load-control-service-path}/Dockerfile
+        - docker run --workdir ${var.work-dir} --rm -i hadolint/hadolint < ${var.work-dir}/docker_non_cniv/neo4j/Dockerfile
+        - docker run --workdir ${var.work-dir} --rm -i hadolint/hadolint < ${var.work-dir}/docker_non_cniv/neo4j-populator/Dockerfile
+        - docker run --workdir ${var.work-dir} --rm -i hadolint/hadolint < ${var.work-dir}/docker_non_cniv/neo4j-load-profiles/Dockerfile
+        - docker run --workdir ${var.work-dir} --rm -i hadolint/hadolint < ${var.work-dir}/docker_non_cniv/load-generator/Dockerfile
+        - docker run --workdir ${var.work-dir} --rm -i hadolint/hadolint < ${var.work-dir}/docker_non_cniv/load-control-client/Dockerfile
+        - docker run --workdir ${var.work-dir} --rm -i hadolint/hadolint < ${var.work-dir}/docker_non_cniv/load-control-service/Dockerfile
+
+  lint-helm:
+    - task: helm-lint
+      docker-image: adp-release-auto
+      cmd: helm lint ${var.helm-chart-name} --with-subcharts -f ${var.helm-chart-name}/values.yaml
+
+  build-and-push-base-image:
+    - task: docker-build-base
+      # Revert this back to "OS_BASE_IMAGE_TAG=${common.cbos-newest-version}" post CNIV 1.1.0
+      cmd: /bin/bash -c "cd ${var.work-dir}/${var.base-path} && docker build . --build-arg='OS_BASE_IMAGE_TAG=6.12.0-13'
+        --build-arg='CREATED=${var.created}' --build-arg='COMMIT=${var.commithash}' --build-arg='APP_VERSION=${var.version}' -t ${var.base-image-path}:${var.version}"
+    - task: docker-tag-base-latest
+      cmd: docker tag ${var.base-image-path}:${var.version} ${var.base-image-path}:latest
+    - task: docker-push-base
+      cmd:
+        - docker push ${var.base-image-path}:${var.version}
+        - docker push ${var.base-image-path}:latest
+
+  build-and-push-images:
+    - task: build-and-push-neo4j
+      cmd:
+        - /bin/bash -c "cd ${var.work-dir}/${var.neo4j-path} && docker build --no-cache . --build-arg='CREATED=${var.created}' --build-arg='COMMIT=${var.commithash}'
+          --build-arg='APP_VERSION=${var.version}' -t ${var.neo4j-image-path}:${var.version}"
+        - docker tag ${var.neo4j-image-path}:${var.version} ${var.neo4j-image-path}:latest
+        - docker push ${var.neo4j-image-path}:${var.version}
+        - docker push ${var.neo4j-image-path}:latest
+    - task: build-and-push-neo4j-populator
+      cmd:
+        - /bin/bash -c "cd ${var.work-dir}/${var.neo4j-populator-path} && docker build --no-cache . --build-arg='BASE_IMAGE_REPO=${var.image-registry}/${var.image-repo}' -t ${var.neo4j-populator-image-path}:${var.version}"
+        - docker tag ${var.neo4j-populator-image-path}:${var.version} ${var.neo4j-populator-image-path}:latest
+        - docker push ${var.neo4j-populator-image-path}:${var.version}
+        - docker push ${var.neo4j-populator-image-path}:latest
+    - task: build-and-push-neo4j-load-profiles
+      cmd:
+        - /bin/bash -c "cd ${var.work-dir}/${var.neo4j-load-profiles-path} && docker build --no-cache . --build-arg='BASE_IMAGE_REPO=${var.image-registry}/${var.image-repo}' -t ${var.neo4j-load-profiles-image-path}:${var.version}"
+        - docker tag ${var.neo4j-load-profiles-image-path}:${var.version} ${var.neo4j-load-profiles-image-path}:${var.load-image-tag}
+        - docker push ${var.neo4j-load-profiles-image-path}:${var.load-image-tag}
+        - /bin/bash -c "cd ${var.work-dir}/${var.neo4j-load-profiles-path} && chmod u+x ./image_diff.sh && ./image_diff.sh ${var.neo4j-load-profiles-image-path}:${var.load-image-tag} ${var.neo4j-load-profiles-image-path}:${var.version}"
+    - task: build-and-push-metric-load-generator
+      cmd:
+        - /bin/bash -c "cd ${var.work-dir}/${var.load-generator-path} && docker build --no-cache . --build-arg='BASE_IMAGE_REPO=${var.image-registry}/${var.image-repo}' -t ${var.metric-load-generator-image-path}:${var.version}"
+        - docker tag ${var.metric-load-generator-image-path}:${var.version} ${var.metric-load-generator-image-path}:latest
+        - docker push ${var.metric-load-generator-image-path}:${var.version}
+        - docker push ${var.metric-load-generator-image-path}:latest
+    - task: build-and-push-load-control-client
+      cmd:
+        - /bin/bash -c "cd ${var.work-dir}/${var.load-control-client-path} && docker build --no-cache . --build-arg='BASE_IMAGE_REPO=${var.image-registry}/${var.image-repo}' -t ${var.load-control-client-image-path}:${var.version}"
+        - docker tag ${var.load-control-client-image-path}:${var.version} ${var.load-control-client-image-path}:latest
+        - docker push ${var.load-control-client-image-path}:${var.version}
+        - docker push ${var.load-control-client-image-path}:latest
+    - task: build-and-push-load-control-service
+      cmd:
+        - /bin/bash -c "cd ${var.work-dir}/${var.load-control-service-path} && docker build --no-cache . --build-arg='BASE_IMAGE_REPO=${var.image-registry}/${var.image-repo}' -t ${var.load-control-service-image-path}:${var.version}"
+        - docker tag ${var.load-control-service-image-path}:${var.version} ${var.load-control-service-image-path}:latest
+        - docker push ${var.load-control-service-image-path}:${var.version}
+        - docker push ${var.load-control-service-image-path}:latest
+
+  # The PCR version of the image design rule checks ignores two DRs relating to the naming scheme for versions. The DRs specify that the version must
+  # contain numbers only, but we use the commit hash for the PCR version.
+  image-design-rule-checks-pcr:
+    - task: check-base
+      docker-image: adp-image-dr-check
+      docker-in-docker: socket
+      cmd: image-dr-check -rv2 -i ${var.base-image-path}:${var.version} --output .bob/image-drs/check-base/ -DimageDesignRule.config.DR-D470203-041=disable -DimageDesignRule.config.DR-D470203-050=disable
+    - task: check-neo4j
+      docker-image: adp-image-dr-check
+      docker-in-docker: socket
+      cmd: image-dr-check -rv2 -i ${var.neo4j-image-path}:${var.version} --output .bob/image-drs/check-neo4j/ -DimageDesignRule.config.DR-D470203-041=disable -DimageDesignRule.config.DR-D470203-050=disable
+    - task: check-neo4j-populator
+      docker-image: adp-image-dr-check
+      docker-in-docker: socket
+      cmd: image-dr-check -rv2 -i ${var.neo4j-populator-image-path}:${var.version} --output .bob/image-drs/check-neo4j-populator/ -DimageDesignRule.config.DR-D470203-041=disable -DimageDesignRule.config.DR-D470203-050=disable
+    - task: check-neo4j-load-profiles
+      docker-image: adp-image-dr-check
+      docker-in-docker: socket
+      cmd: image-dr-check -rv2 -i ${var.neo4j-load-profiles-image-path}:${var.version} --output .bob/image-drs/check-neo4j-load-profiles/ -DimageDesignRule.config.DR-D470203-041=disable -DimageDesignRule.config.DR-D470203-050=disable
+    - task: check-metric-load-generator
+      docker-image: adp-image-dr-check
+      docker-in-docker: socket
+      cmd: image-dr-check -rv2 -i ${var.metric-load-generator-image-path}:${var.version} --output .bob/image-drs/check-metric-load-generator/ -DimageDesignRule.config.DR-D470203-041=disable -DimageDesignRule.config.DR-D470203-050=disable
+    - task: check-load-control-client
+      docker-image: adp-image-dr-check
+      docker-in-docker: socket
+      cmd: image-dr-check -rv2 -i ${var.load-control-client-image-path}:${var.version} --output .bob/image-drs/check-load-control-client/ -DimageDesignRule.config.DR-D470203-041=disable -DimageDesignRule.config.DR-D470203-050=disable
+    - task: check-load-control-service
+      docker-image: adp-image-dr-check
+      docker-in-docker: socket
+      cmd: image-dr-check -rv2 -i ${var.load-control-service-image-path}:${var.version} --output .bob/image-drs/check-load-control-service/ -DimageDesignRule.config.DR-D470203-041=disable -DimageDesignRule.config.DR-D470203-050=disable
+
+  image-design-rule-checks-release:
+    - task: check-base
+      docker-image: adp-image-dr-check
+      docker-in-docker: socket
+      cmd: image-dr-check -rv2 -i ${var.base-image-path}:${var.version} --output .bob/image-drs/check-base/
+    - task: check-neo4j
+      docker-image: adp-image-dr-check
+      docker-in-docker: socket
+      cmd: image-dr-check -rv2 -i ${var.neo4j-image-path}:${var.version} --output .bob/image-drs/check-neo4j/
+    - task: check-neo4j-populator
+      docker-image: adp-image-dr-check
+      docker-in-docker: socket
+      cmd: image-dr-check -rv2 -i ${var.neo4j-populator-image-path}:${var.version} --output .bob/image-drs/check-neo4j-populator/
+    - task: check-neo4j-load-profiles
+      docker-image: adp-image-dr-check
+      docker-in-docker: socket
+      cmd: image-dr-check -rv2 -i ${var.neo4j-load-profiles-image-path}:${var.version} --output .bob/image-drs/check-neo4j-load-profiles/
+    - task: check-metric-load-generator
+      docker-image: adp-image-dr-check
+      docker-in-docker: socket
+      cmd: image-dr-check -rv2 -i ${var.metric-load-generator-image-path}:${var.version} --output .bob/image-drs/check-metric-load-generator/
+    - task: check-load-control-client
+      docker-image: adp-image-dr-check
+      docker-in-docker: socket
+      cmd: image-dr-check -rv2 -i ${var.load-control-client-image-path}:${var.version} --output .bob/image-drs/check-load-control-client/
+    - task: check-load-control-service
+      docker-image: adp-image-dr-check
+      docker-in-docker: socket
+      cmd: image-dr-check -rv2 -i ${var.load-control-service-image-path}:${var.version} --output .bob/image-drs/check-load-control-service/
+
+  helm-dep-up:
+    - task: helm-dep-up
+      docker-flags:
+        - "--env ENABLE_HELM_V3=${env.ENABLE_HELM_V3}"
+      docker-image: adp-release-auto
+      cmd: helm dep up ${var.work-dir}/${var.helm-chart-name}
+
+  build-helm:
+    - task: helm-package
+      docker-image: adp-release-auto
+      cmd: helm-package --folder ${var.helm-chart-name} --version ${var.version} --replace VERSION=${var.version} --replace REPOPATH=${var.image-repo}
+
+  push-helm:
+    - task: helm-push
+      docker-image: adp-release-auto
+      cmd: upload_file.sh --filename=.bob/${var.helm-chart-name}-${var.version}.tgz --repository=${var.helm-chart-repo} --api-token=${env.HELM_REPO_TOKEN}
+
+  trivy-inline-scan:
+    - task: create-dir
+      cmd:
+        - mkdir -p trivy
+
+    - task: scan-base
+      docker-image: trivy-inline-scan
+      docker-in-docker: socket
+      cmd: --format json --output trivy/trivy.report.base.json ${var.base-image-path}:${var.version}
+
+    - task: scan-neo4j
+      docker-image: trivy-inline-scan
+      docker-in-docker: socket
+      cmd: --format json --output trivy/trivy.report.neo4j.json ${var.neo4j-image-path}:${var.version}
+
+    - task: scan-neo4j-populator
+      docker-image: trivy-inline-scan
+      docker-in-docker: socket
+      cmd: --format json --output trivy/trivy.report.populator.json ${var.neo4j-populator-image-path}:${var.version}
+
+    - task: scan-neo4j-load-profiles
+      docker-image: trivy-inline-scan
+      docker-in-docker: socket
+      cmd: --format json --output trivy/trivy.report.load_profiles.json ${var.neo4j-load-profiles-image-path}:${var.load-image-tag}
+
+    - task: scan-metric-load-generator
+      docker-image: trivy-inline-scan
+      docker-in-docker: socket
+      cmd: --format json --output trivy/trivy.report.generator.json ${var.metric-load-generator-image-path}:${var.version}
+
+    - task: scan-load-control-client
+      docker-image: trivy-inline-scan
+      docker-in-docker: socket
+      cmd: --format json --output trivy/trivy.report.control_client.json ${var.load-control-client-image-path}:${var.version}
+
+    - task: scan-load-control-service
+      docker-image: trivy-inline-scan
+      docker-in-docker: socket
+      cmd: --format json --output trivy/trivy.report.control_service.json ${var.load-control-service-image-path}:${var.version}
+
+  grype-scan:
+    - task: grype-scan-base
+      docker-image: grype-scan
+      docker-in-docker: socket
+      cmd: grype_scan
+        --image ${var.base-image-path}:${var.version}
+        --report-dir grype-reports
+    - task: grype-scan-neo4j
+      docker-image: grype-scan
+      docker-in-docker: socket
+      cmd: grype_scan
+        --image ${var.neo4j-image-path}:${var.version}
+        --report-dir grype-reports
+    - task: grype-scan-neo4j-populator
+      docker-image: grype-scan
+      docker-in-docker: socket
+      cmd: grype_scan
+        --image ${var.neo4j-populator-image-path}:${var.version}
+        --report-dir grype-reports
+    - task: grype-scan-neo4j-load-profiles
+      docker-image: grype-scan
+      docker-in-docker: socket
+      cmd: grype_scan
+        --image ${var.neo4j-load-profiles-image-path}:${var.load-image-tag}
+        --report-dir grype-reports
+    - task: grype-scan-metric-load-generator
+      docker-image: grype-scan
+      docker-in-docker: socket
+      cmd: grype_scan
+        --image ${var.metric-load-generator-image-path}:${var.version}
+        --report-dir grype-reports
+    - task: grype-scan-load-control-client
+      docker-image: grype-scan
+      docker-in-docker: socket
+      cmd: grype_scan
+        --image ${var.load-control-client-image-path}:${var.version}
+        --report-dir grype-reports
+    - task: grype-scan-load-control-service
+      docker-image: grype-scan
+      docker-in-docker: socket
+      cmd: grype_scan
+        --image ${var.load-control-service-image-path}:${var.version}
+        --report-dir grype-reports
+
+  hadolint-scan:
+    - task: hadolint-scan
+      docker-image: hadolint-scan
+      docker-flags:
+        - "--workdir /app/"
+        - "-v ${env.PWD}/hadolint_config.yaml:/hadolint_config.yaml"
+        - "-v ${env.PWD}/build/hadolint-scan:/tmp/reports/"
+        - "-v ${env.PWD}/${var.base-path}/Dockerfile:/${var.base-path}/Dockerfile"
+        - "-v ${env.PWD}/${var.neo4j-path}/Dockerfile:/${var.neo4j-path}/Dockerfile"
+        - "-v ${env.PWD}/${var.neo4j-populator-path}/Dockerfile:/${var.neo4j-populator-path}/Dockerfile"
+        - "-v ${env.PWD}/${var.neo4j-load-profiles-path}/Dockerfile:/${var.neo4j-load-profiles-path}/Dockerfile"
+        - "-v ${env.PWD}/${var.load-generator-path}/Dockerfile://${var.load-generator-path}/Dockerfile"
+        - "-v ${env.PWD}/${var.load-control-client-path}/Dockerfile:/${var.load-control-client-path}/Dockerfile"
+        - "-v ${env.PWD}/${var.load-control-service-path}/Dockerfile:/${var.load-control-service-path}/Dockerfile"
+      cmd: "-p eric-enm-cniv-dps-benchmark
+            -f /${var.base-path}/Dockerfile /${var.neo4j-path}/Dockerfile /${var.neo4j-populator-path}/Dockerfile /${var.neo4j-load-profiles-path}/Dockerfile
+               /${var.load-generator-path}/Dockerfile /${var.load-control-client-path}/Dockerfile /${var.load-control-service-path}/Dockerfile
+            -c /hadolint_config.yaml;
+            echo $? > .bob/var.resultcode_hadolint_check"
+
+  kubeaudit-scan:
+    - task: helm-template
+      docker-image: adp-release-auto
+      cmd: "helm template ${var.helm-chart-name} -f ${var.helm-chart-name}/values.yaml --output-dir=.bob/helm_src"
+    - task: kubeaudit-scan
+      docker-image: va-scan-kubeaudit
+      docker-flags:
+        - "--workdir /opt/va-scan-kubeaudit/"
+        - "-v ${env.PWD}:/opt/va-scan-kubeaudit/conf"
+        - "-v ${env.PWD}/build/kubeaudit-reports/:/tmp/reports"
+        - "-v ${env.PWD}/.bob/helm_src:/tmp/src"
+      cmd: " "
+
+  kubesec-scan:
+    - task: helm-template
+      docker-image: va-scan-kubesec
+      cmd: "helm template ${var.helm-chart-name} -f ${var.helm-chart-name}/values.yaml --output-dir=.bob/helm_kubesec"
+    - task: kubesec-scan
+      docker-image: va-scan-kubesec
+      docker-flags:
+        - "--workdir /opt/va-scan-kubesec/"
+        - "-v ${env.PWD}:/opt/va-scan-kubesec/conf"
+        - "-v ${env.PWD}/build/kubesec-reports/:/tmp/reports"
+        - "-v ${env.PWD}/.bob/helm_kubesec/:/tmp/src"
+      cmd: " "
+
+  fetch-xray-report:
+    - task: fetch-xray-report
+      docker-image: adp-release-auto
+      cmd: bash -c 'fetch-xray
+        --config ${env.PWD}/xray_report.yaml
+        --debug
+        --user ${env.HELM_REPO_USER}
+        --apikey ${env.HELM_REPO_TOKEN}
+        --output ${env.PWD}/build/xray-reports/xray_report.json
+        --set version=${var.version}
+        --set image-repo=${var.image-repo}
+        --set load-image-tag=${var.load-image-tag}
+        --raw-output ${env.PWD}/build/xray-reports/raw_xray_report.json'
+
+  generate-VA-report-V2:
+    - task: generate-VA-report-V2
+      docker-image: adp-release-auto
+      cmd: bash -c 'va-report
+        --config ${env.PWD}/va_report.config
+        --md --debug
+        --output ${env.PWD}/DPS_Benchmark_Vulnerability_Report_2.0.md
+        --set version="1.0.1"
+        --trivy-reports trivy
+        --anchore-reports grype-reports
+        --xray-report ${env.PWD}/build/xray-reports/xray_report.json
+        --raw-xray-report ${env.PWD}/build/xray-reports/raw_xray_report.json
+        || true'
+
+    - task: markdown-to-pdf
+      docker-image: adp-release-auto
+      cmd: 'doc-handler generate --config documentation_in_markdown.yaml
+                                   --output ./doc
+                                   --format pdf
+                                   --stylesheet /usr/share/marketplace/resources/pdf_style.css'
+
+  build-pointfix:
+    - task: build-pointfix
+      cmd:
+        - /bin/bash -c "cd ${var.work-dir}/${var.base-path} && docker build . --build-arg='OS_BASE_IMAGE_TAG=yyyy'
+          --build-arg='CREATED=${var.created}' --build-arg='COMMIT=${var.commithash}' --build-arg='APP_VERSION=xxxx' -t ${var.base-image-path}:xxxx"
+        - docker push ${var.base-image-path}:xxxx
+
+

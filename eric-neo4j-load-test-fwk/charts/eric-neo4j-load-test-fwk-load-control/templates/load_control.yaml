@@ -1,0 +1,88 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: neo4j-load-generator-control
+  labels:
+    benchmarkName: {{ $.Chart.Name }}
+    benchmarkgroup: {{ template "eric-neo4j-load-test-fwk.benchmarkGroup.label" $ }}
+spec:
+  template:
+    metadata:
+      labels:
+        run: load-generator-control
+        container.kubeaudit.io/load-generator-control.allow-read-only-root-filesystem-false: ""
+    spec:
+      automountServiceAccountToken: false
+      {{- if $.Values.global.securityContext.enabled }}
+      securityContext:
+        fsGroup: 10001
+        runAsUser: 10001
+        runAsGroup: 10001
+      {{- end }}
+      {{- if $.Values.global.registry.pullSecret }}
+      imagePullSecrets:
+        - name: {{ $.Values.global.registry.pullSecret }}
+      {{- end }}
+      {{- if $.Values.global.cnivAgent.enabled }}
+      initContainers:
+        - name: init-load-generator-control
+          image: {{ $.Values.global.registry.url }}/{{ $.Values.global.images.repo }}/{{ $.Values.global.images.loadTestFramework.name }}:{{ $.Values.global.images.loadTestFramework.tag }}
+          {{- if $.Values.global.securityContext.enabled }}
+          securityContext:
+            readOnlyRootFilesystem: true
+            privileged: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          {{- end}}
+          imagePullPolicy: {{ $.Values.global.images.policy }}
+          command:
+            - "/bin/bash"
+            - "-c"
+            - |
+              # Wait for CNIV
+              while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://{{ $.Values.global.cnivAgent.name }}:{{ $.Values.global.cnivAgent.port }}/start_request/{{ template "eric-neo4j-load-test-fwk.benchmarkGroup.label" $ }}/{{ $.Chart.Name }})" != "202" ]]
+                do
+                  echo "$(date) - Waiting for CNIV to indicate GO..."
+                  sleep 10
+                done
+                echo "$(date) - CNIV signalled GO"
+      {{- end }}
+      containers:
+        - name: load-generator-control
+          image: {{ $.Values.global.registry.url }}/{{ $.Values.global.images.repo }}/{{ $.Values.global.images.controlServer.name }}:{{ $.Values.global.images.controlServer.tag }}
+          imagePullPolicy: {{ $.Values.global.images.policy }}
+          env:
+            - name: LOG_LEVEL
+              value: "{{ $.Values.load.control.logLevel }}"
+            - name: LOG_DIR
+              value: /framework_data/logs
+            - name: SPRING_CONFIG
+              value: /config/application.properties
+            - name: RUNNING_IN_CNIV
+              value: "{{ $.Values.global.cnivAgent.enabled }}"
+          volumeMounts:
+            - name: nfs-profile
+              mountPath: /framework_data
+            - name: config-properties
+              mountPath: /config
+          ports:
+            - containerPort: 8080
+          {{- if $.Values.global.securityContext.enabled }}
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+          {{- end }}
+      volumes:
+        - name: config-properties
+          configMap:
+            name: control-cm
+        - name: nfs-profile
+          persistentVolumeClaim:
+            claimName: load-profiles
+      restartPolicy: Never

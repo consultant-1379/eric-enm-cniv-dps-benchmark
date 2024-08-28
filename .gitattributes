@@ -1,0 +1,2 @@
+# Prevent shell scripts from having Windows CRLF line endings locally so they can be run in WSL without issues
+*.sh text eol=lf

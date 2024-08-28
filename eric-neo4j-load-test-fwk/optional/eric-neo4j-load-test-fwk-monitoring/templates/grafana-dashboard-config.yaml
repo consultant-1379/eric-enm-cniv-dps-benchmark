@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+data:
+  default.yaml: |-
+    apiVersion: 1
+    providers:
+      - name: Default # A uniquely identifiable name for the provider
+        folder: DB  # The folder where to place the dashboards
+        orgId: 1
+        type: file
+        options:
+          path: /etc/grafana/provisioning/dashboards
+  load-neo4j-dashboards.json: |-
+{{ .Files.Get "dashboards/neo4j.json" | indent 4 }}
+  load-multi-dashboards.json: |-
+{{ .Files.Get "dashboards/multidb.json" | indent 4 }}
+  load-ltf-dashboard.json: |-
+{{ .Files.Get "dashboards/ltf.json" | indent 4 }}

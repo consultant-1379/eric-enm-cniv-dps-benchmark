@@ -1,0 +1,31 @@
+# can use this to copy the log files from the PVC if needed
+# kubectl cp npv-inspector:neo4j/log/data-populator-log.log ./read.log
+# or simply access it directly
+# kubectl exec -it npv-inspector -- sh
+apiVersion: v1
+kind: Pod
+metadata:
+  name: npv-inspector
+spec:
+  affinity:
+    podAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: statefulset.kubernetes.io/pod-name
+                operator: In
+                values:
+                  - neo4j-0
+          topologyKey: "kubernetes.io/hostname"
+  containers:
+  - name: inspect-neo4j-pv
+    image: armdocker.rnd.ericsson.se/proj_oss_releases/test-ubuntu
+    command: ["tail"]
+    args: ["-f", "/dev/null"]
+    volumeMounts:
+    - mountPath: "/neo4j"
+      name: neo4j-pvc-data
+  volumes:
+  - name: neo4j-pvc-data
+    persistentVolumeClaim:
+      claimName: neo4j-pvc-data-neo4j-0

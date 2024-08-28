@@ -1,0 +1,17 @@
+load:
+  generator:
+    ignoreResources: true
+    generatorPodTtlAfterFinished: 3600
+    properties: # set these in specific values file if you do not want to inherit the values here
+      - task.execution.threads=100
+      - prometheus.metrics.enabled={{ $.Values.global.monitoring.metricsEnabled }}
+      - prometheus.metrics.port=2004
+    extendedProperties: # set these if you want to inherit the default values above
+  java:
+    debugPort: 0
+  requests:
+    memory: 2G
+    cpu: 4
+  limits:
+    memory: 4G
+    cpu: 6

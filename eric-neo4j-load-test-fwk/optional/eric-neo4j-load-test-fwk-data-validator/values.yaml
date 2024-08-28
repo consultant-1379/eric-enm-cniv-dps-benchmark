@@ -1,0 +1,5 @@
+load:
+  validatorResources:
+    cpu: 0 # set to non-zero to request CPU
+  java:
+    debugPort: 0

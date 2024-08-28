@@ -1,0 +1,68 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  labels:
+    job-name: neo4j-data-validator
+    benchmarkName: {{ $.Chart.Name }}
+  name: neo4j-data-validator
+spec:
+  template:
+    metadata:
+      labels:
+        job-name: neo4j-data-validator
+    spec:
+      {{- if $.Values.load.validatorResources.cpu }}
+      affinity: #run populator on different node than main populator as both request high CPU
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchExpressions:
+                  - key: job-name
+                    operator: In
+                    values:
+                    - neo4j-benchmarking-populator
+      {{- end }}
+      initContainers:
+        - name: register-validator
+          image: {{ $.Values.global.registry.url }}/{{ $.Values.global.images.repo }}/{{ $.Values.global.images.controlClient.name }}:{{ $.Values.global.images.controlClient.tag }}
+          imagePullPolicy: {{ $.Values.global.images.policy }}
+          args: [ "db_validation" ]
+      containers:
+        - name: neo4j-data-validator
+          image: {{ $.Values.global.registry.url }}/{{ $.Values.global.images.repo }}/{{ $.Values.global.images.neo4jPopulator.name }}:{{ $.Values.global.images.neo4jPopulator.tag }}
+          imagePullPolicy: {{ $.Values.global.images.policy }}
+          args: [ "--validate" ]
+          env:
+            - name: CONFIG_FILE_LOCATION
+              value: /config/populator.properties
+            - name: LOG_DIRECTORY
+              value: /framework_data/logs
+          {{- if $.Values.load.java.debugPort }}
+            - name: JAVA_OPTS
+              value: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:{{ $.Values.load.java.debugPort }}"
+          ports:
+          - containerPort: {{ $.Values.load.java.debugPort }}
+            name: "jvm-debug"
+          {{- end }}
+          {{- if $.Values.load.validatorResources.cpu }}
+          resources:
+            requests:
+              cpu: {{ $.Values.load.validatorResources.cpu }}
+          {{- end }}
+          volumeMounts:
+            - name: templates-data
+              mountPath: /config #Cannot use env variable here. Make sure this mountPath and TEMPLATE_FILE_LOCATION point to same location.
+            - name: nfs-profile
+              mountPath: /framework_data
+      restartPolicy: Never
+      volumes:
+        - name: templates-data
+          configMap:
+            name: neo4j-populator-cm
+        - name: nfs-profile
+          persistentVolumeClaim:
+            claimName: load-profiles
+  backoffLimit: 0

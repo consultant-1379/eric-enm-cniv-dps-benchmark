@@ -1,0 +1,13 @@
+xray:
+  name: eric-neo4j-load-test-fwk
+  version: "{version}"
+  image-repo: "{image-repo}"
+  load-image-tag: "{load-image-tag}"
+  paths:
+    - "ARM-SEKA/proj-eric-oss-cniv-docker-global/{image-repo}/eric-dps-ltf:{version}"
+    - "ARM-SEKA/proj-eric-oss-cniv-docker-global/{image-repo}/eric-enm-neo4j:{version}"
+    - "ARM-SEKA/proj-eric-oss-cniv-docker-global/{image-repo}/eric-neo4j-populator:{version}"
+    - "ARM-SEKA/proj-eric-oss-cniv-docker-global/{image-repo}/eric-neo4j-load-profiles:{load-image-tag}"
+    - "ARM-SEKA/proj-eric-oss-cniv-docker-global/{image-repo}/eric-neo4j-load-generator:{version}"
+    - "ARM-SEKA/proj-eric-oss-cniv-docker-global/{image-repo}/eric-load-control-client:{version}"
+    - "ARM-SEKA/proj-eric-oss-cniv-docker-global/{image-repo}/eric-load-control-service:{version}"

@@ -1,0 +1,85 @@
+# A utility service to simulate the CNIV agent without installing CNIV.
+# Run
+# kubectl exec -it scbench -n <namespace> -- curl http://scbench:8080/makeReady
+# or
+# kubectl exec -it scbench -n <namespace> -- curl http://scbench:8080/makeNotReady
+# to change the hook's state.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: scbench
+  labels:
+    app: scbench
+spec:
+  containers:
+    - name: scbench
+      image: node
+      command:
+        - "/bin/bash"
+        - "-c"
+        - |
+          npm install -g express
+          cat >./server.js <<EOL
+          const express = require('express')
+
+          const server = express()
+          const port = 8080
+
+          var isReady = false
+
+          server.get('/*/*/*', (req, res) => {
+              console.log('Get Request: ' + req.url);
+              if (isReady) {
+                  res.statusCode = 202
+                  res.send('Ready to go\n')
+              } else {
+                  res.statusCode = 200 // can be anything as long as its not 202
+                  res.send('Not ready to go yet\n')
+              }
+          })
+
+          server.post('/*/*/*', (req, res) => {
+              console.log('Post Request: ' + req.url);
+              let body = '';
+              req.on('data', chunk => {
+                body += chunk.toString(); 
+              });
+              req.on('end', () => {
+                console.log('Body: ' + body);
+                res.end('ok');
+              });
+          })
+
+          server.get('/makeReady', (req, res) => {
+              isReady = true
+              res.send('Hook configured to respond with GO\n')
+          })
+
+          server.get('/makeNotReady', (req, res) => {
+              isReady = false
+              res.send('Hook configured to respond with NO GO\n')
+          })
+
+          server.listen(port, () => {
+              console.log('Server running on port ' + port)
+          })
+          EOL
+
+          export NODE_PATH="/usr/local/lib/node_modules"
+          node server.js
+      ports:
+        - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: scbench
+  labels:
+    app: scbench
+spec:
+  clusterIP: None
+  ports:
+    - port: 8080
+      name: http
+  selector:
+    app: scbench

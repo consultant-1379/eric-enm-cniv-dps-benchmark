@@ -1,0 +1,122 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  labels:
+    job-name: neo4j-benchmarking-populator
+    benchmarkName: {{ $.Chart.Name }}
+  name: neo4j-benchmarking-populator
+spec:
+  template:
+    metadata:
+      labels:
+        job-name: neo4j-benchmarking-populator
+        container.kubeaudit.io/neo4j-populator.allow-read-only-root-filesystem-false: ""
+    spec:
+      {{- if $.Values.global.securityContext.enabled }}
+      securityContext:
+        fsGroup: 10001
+        runAsUser: 10001
+        runAsGroup: 10001
+      {{- end}}
+      automountServiceAccountToken: false
+      affinity: #run populator on same node where neo4j-0 is running as neo4j-0-pvc is ReadWriteOnce(can be bound to single node)
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: statefulset.kubernetes.io/pod-name
+                    operator: In
+                    values:
+                      - neo4j-0
+              topologyKey: "kubernetes.io/hostname"
+      initContainers:
+        - name: register-populator
+          image: {{ $.Values.global.registry.url }}/{{ $.Values.global.images.repo }}/{{ $.Values.global.images.controlClient.name }}:{{ $.Values.global.images.controlClient.tag }}
+          {{- if $.Values.global.securityContext.enabled }}
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          {{- end }}
+          imagePullPolicy: {{ $.Values.global.images.policy }}
+          args: [ "populator" ]
+        - name: copy-load-profiles
+          image: {{ $.Values.global.registry.url }}/{{ $.Values.global.images.repo }}/{{ $.Values.global.images.neo4jLoadProfiles.name }}:{{ $.Values.global.load.type }}
+          {{- if $.Values.global.securityContext.enabled }}
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          {{- end }}
+          imagePullPolicy: {{ $.Values.global.images.policy }}
+          volumeMounts:
+            - name: nfs-profile
+              mountPath: /framework_data
+          command:
+            - 'sh'
+            - '-c'
+            - |
+              mkdir -p /framework_data/files/load-profiles /framework_data/files/cache-data
+              cp -Rv load/as_is/* /framework_data/files/load-profiles/
+              cp -Rv load/cache_data/* /framework_data/files/cache-data/
+              cp -Rv templates /framework_data/files/templates/
+      {{- if $.Values.global.registry.pullSecret }}
+      imagePullSecrets:
+        - name: {{ $.Values.global.registry.pullSecret }}
+      {{- end }}
+      containers:
+        - name: neo4j-populator
+          image: {{ $.Values.global.registry.url }}/{{ $.Values.global.images.repo }}/{{ $.Values.global.images.neo4jPopulator.name }}:{{ $.Values.global.images.neo4jPopulator.tag }}
+          imagePullPolicy: {{ $.Values.global.images.policy }}
+          args: [ "/var/lib/neo4j" ]
+          env:
+            - name: CONFIG_FILE_LOCATION
+              value: /config/populator.properties
+            - name: LOG_DIRECTORY
+              value: /var/lib/neo4j/data/logs
+          {{- if $.Values.load.java.debugPort }}
+            - name: JAVA_OPTS
+              value: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:{{ $.Values.load.java.debugPort }}"
+          ports:
+          - containerPort: {{ $.Values.load.java.debugPort }}
+            name: "jvm-debug"
+          {{- end }}
+          volumeMounts:
+            - name: neo4j-pvc-data
+              mountPath: /var/lib/neo4j/data
+            - name: templates-data
+              mountPath: /config #Cannot use env variable here. Make sure this mountPath and TEMPLATE_FILE_LOCATION point to same location.
+            - name: nfs-profile
+              mountPath: /framework_data
+          {{- if $.Values.load.neo4j.populatorResources.cpu }}
+          resources:
+            requests:
+              cpu: {{ $.Values.load.neo4j.populatorResources.cpu }}
+          {{- end }}
+          {{- if $.Values.global.securityContext.enabled }}
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+          {{- end }}
+      restartPolicy: Never
+      volumes:
+        - name: neo4j-pvc-data
+          persistentVolumeClaim:
+            claimName: neo4j-pvc-data-neo4j-0
+        - name: templates-data
+          configMap:
+            name: neo4j-populator-cm
+        - name: nfs-profile
+          persistentVolumeClaim:
+            claimName: load-profiles
+  backoffLimit: 0

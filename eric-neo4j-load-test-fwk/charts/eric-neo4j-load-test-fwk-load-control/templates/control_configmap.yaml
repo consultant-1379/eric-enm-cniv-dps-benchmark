@@ -1,0 +1,20 @@
+apiVersion: v1
+data:
+  application.properties: |
+    control.populator.timeout={{ $.Values.timeout.populator }}
+    control.db.start.timeout={{ $.Values.timeout.database.start }}
+    control.db.warmup.timeout={{ $.Values.timeout.database.warmup }}
+    control.load.generator.timeout={{ $.Values.timeout.generator }}
+    control.registration.timeout={{ $.Values.registration.timeout }}
+    progress.reporting.interval={{ $.Values.progress.reporting.interval }}
+    control.generator.max.queue.size={{ $.Values.progress.queueThreshold }}
+    control.load.generators.disabled={{ (eq (int $.Values.global.load.profiles) 0) | ternary "true" "false" }}
+    {{ if $.Values.global.cnivAgent.enabled }}
+    cniv.host={{ $.Values.global.cnivAgent.name }}
+    cniv.port={{ $.Values.global.cnivAgent.port }}
+    cniv.benchmark.group={{ template "eric-neo4j-load-test-fwk.benchmarkGroup.label" $ }}
+    cniv.benchmark.name={{ .Chart.Name }}
+    {{- end }}
+kind: ConfigMap
+metadata:
+  name: control-cm

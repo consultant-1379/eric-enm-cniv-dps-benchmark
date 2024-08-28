@@ -1,0 +1,87 @@
+# This is the default values.yaml which will be used by CI scripts when building the CSAR.
+# During a CSAR build, CI renders all of the templates based on the contents of this file.
+# This is done to ensure that the correct images are extracted and bundled together with the overall package (image registry, image repo, image names and image tags/versions).
+# Do not remove the REPOPATH and VERSION placeholders. If you need to modify them, make sure that these changes are reflected in the rules2.0.yaml file also.
+#
+# Also note that any properties configured here will be applied by Helm by default if not overwritten by another values YAML file.
+global:
+  load:
+    type: ENM_24.2_Small_Cloud_Native
+    profiles: 72
+    otherSupportedLoad:
+      - ENM_23.3_Extra_Large_Physical
+      - ENM_24_2_Extra_Large_Cloud_Native
+    transactionPropertiesPresent: false
+  securityContext:
+    enabled: true
+  persistentVolumeClaim:
+    storageClass:
+      file: erikube-nfs
+      block: ieat3par-12
+    sfs:
+      storage: 1Gi
+    neo4j:
+      storage: 60Gi
+  ignoreResources: false
+  registry:
+    url: armdocker.rnd.ericsson.se
+  neo4j:
+    # change this if you want to avoid re-population, see README
+    rebuild: true
+    instances: 3
+    mode: core
+    # the values for the memory and cpu are derived from the RCD tool for Small Cloud Native ENM https://resourceconfigurationdata.internal.ericsson.com:8888/#/deploymentsetup
+    requests:
+      memory: 49152Mi
+      cpu: 1988m
+    limits:
+      memory: 49152Mi
+      cpu: 7950m
+    env:
+      connector_bolt_thread_pool_min_size: 500
+      connector_bolt_thread_pool_max_size: 500
+      transaction_concurrent_max: 555
+      cacheWarmupEnable: true
+      heap_size: "12g"
+      pagecache_size: "14g"
+      iops_limit: 1500
+      final_report_delay: 120
+      max_direct_memory: "6g"
+    podAntiAffinityEnabled: true
+    isStandalone: false
+  monitoring:
+    metricsEnabled: false
+    persistPrometheus: false
+  images:
+    repo: REPOPATH
+    policy: Always
+    neo4j:
+      name: eric-enm-neo4j
+      tag: VERSION
+    neo4jPopulator:
+      name: eric-neo4j-populator
+      tag: VERSION
+    neo4jLoadProfiles:
+      name: eric-neo4j-load-profiles
+    loadGenerator:
+      name: eric-neo4j-load-generator
+      tag: VERSION
+    controlClient:
+      name: eric-load-control-client
+      tag: VERSION
+    controlServer:
+      name: eric-load-control-service
+      tag: VERSION
+    loadTestFramework:
+      name: eric-dps-ltf
+      tag: VERSION
+  populator:
+    concurrent:
+      workers: 7
+tags:
+  # change this if you want to avoid re-population, see README
+  validate: false
+
+# See comments in eric-neo4j-load-test-fwk/charts/build-utility/templates/build_utility_job.yaml.
+eric-neo4j-load-test-fwk-build-utility:
+  buildUtilityEnabled: true

@@ -1,0 +1,26 @@
+# Below "global.cnivAgent.enabled" value will be overwritten by the CNIV charts, as needed, when the load testing framework is included there.
+global:
+  cnivAgent:
+    enabled: false
+    name: scbench
+    port: 8080
+load:
+  benchmarkgroup: runtime
+  control:
+    logLevel: DEBUG
+
+timeout:
+  populator: 1800
+  database:
+    start: 1200
+    warmup: 300
+  generator: 90
+
+progress:
+  reporting:
+    interval: 3600
+  # note this should be lower than the generator's queue threshold which determines failure cases
+  # whereas this is merely to act as a warning.
+  queueThreshold: 30000
+registration:
+  timeout: 300

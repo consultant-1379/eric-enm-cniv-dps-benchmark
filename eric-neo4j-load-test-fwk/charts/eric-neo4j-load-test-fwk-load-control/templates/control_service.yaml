@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: controller
+  labels:
+    run: load-generator-control
+    benchmarkName: {{ $.Chart.Name }}
+    benchmarkgroup: {{ template "eric-neo4j-load-test-fwk.benchmarkGroup.label" $ }}
+
+spec:
+  ports:
+    - port: 8080
+      protocol: TCP
+  selector:
+    run: load-generator-control

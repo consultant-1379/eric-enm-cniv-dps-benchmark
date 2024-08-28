@@ -1,0 +1,67 @@
+global:
+  load:
+    type: ENM_24_3_Small_Cloud_Native
+    profiles: 69
+  persistentVolumeClaim:
+    storageClass:
+      file: erikube-nfs
+      block: ieat3par-12
+    sfs:
+      storage: 5Gi
+  ignoreResources: false
+  registry:
+    url: armdocker.rnd.ericsson.se
+  images:
+    repo: proj-eric-oss-cniv/proj-eric-oss-cniv-drop
+    policy: Always
+    neo4j:
+      name: eric-enm-neo4j
+      tag: latest
+    neo4jPopulator:
+      name: eric-neo4j-populator
+      tag: latest
+    neo4jLoadProfiles:
+      name: eric-neo4j-load-profiles
+    loadGenerator:
+      name: eric-neo4j-load-generator
+      tag: latest
+    controlClient:
+      name: eric-load-control-client
+      tag: latest
+    controlServer:
+      name: eric-load-control-service
+      tag: latest
+    loadTestFramework:
+      name: eric-dps-ltf
+      tag: latest
+  populator:
+    concurrent:
+      workers: 7
+
+eric-neo4j-load-test-fwk-load-generator:
+  load:
+    generator:
+      extendedProperties:
+        - generator.start.minute=2100
+        - generator.end.minute=2280
+        - task.ignore.fatal.errors=false
+        - task.queue.threshold=100000
+        - generator.max.query.size=50000
+        # custom threads
+        - task.execution.threads=10
+        - custom.execution.threads.mscmce=90
+        - custom.execution.threads.impexpserv=45
+        - custom.execution.threads.fmalarmprocessing=45
+        - custom.execution.threads.mspm=45
+
+
+# Needs to override the setting configured in the default values.
+eric-neo4j-load-test-fwk-build-utility:
+  buildUtilityEnabled: false
+
+eric-neo4j-load-test-fwk-load-control:
+  timeout:
+    populator: 1800
+    database:
+      start: 1200
+      warmup: 420

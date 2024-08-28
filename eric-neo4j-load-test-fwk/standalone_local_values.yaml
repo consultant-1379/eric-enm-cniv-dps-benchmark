@@ -1,0 +1,93 @@
+global:
+  cnivAgent:
+    enabled: false
+  securityContext:
+    enabled: false
+  load:
+    type: standalone
+    profiles: 2
+    otherSupportedLoad:
+      - ENM_23.2_Extra_Large_Physical
+      - ENM_23.3_Extra_Large_Physical
+      - ENM_23.3_Small_Cloud_Native
+  ignoreResources: true
+  registry:
+    url: local
+  images:
+    repo: repo
+    policy: Never
+    neo4j:
+      name: eric-enm-neo4j
+      tag: standalone
+    neo4jPopulator:
+      name: eric-neo4j-populator
+      tag: standalone
+    neo4jLoadProfiles:
+      name: eric-neo4j-load-profiles
+      tag: standalone
+    loadGenerator:
+      name: eric-neo4j-load-generator
+      tag: standalone
+    controlClient:
+      name: eric-load-control-client
+      tag: standalone
+    controlServer:
+      name: eric-load-control-service
+      tag: standalone
+    loadTestFramework:
+      name: eric-dps-ltf
+      tag: standalone
+  neo4j:
+    rebuild: false
+    instances: 1
+    mode: single
+    requests:
+      memory: 256M
+      cpu: 0.5
+    env:
+      heap_size: "1g"
+      pagecache_size: "1g"
+    podAntiAffinityEnabled: false
+    isStandalone: true
+  monitoring:
+    metricsEnabled: true
+  populator:
+    concurrent:
+      workers: 7
+
+# See comments in eric-neo4j-load-test-fwk/charts/build-utility/templates/build_utility_job.yaml.
+eric-neo4j-load-test-fwk-build-utility:
+  buildUtilityEnabled: false
+
+
+eric-neo4j-load-test-fwk-load-generator:
+  load:
+    generator:
+      properties:
+        - task.execution.threads=10
+        - task.retry.delay.initial=1000
+        - task.retry.attempts=3
+        - task.ignore.fatal.errors=false
+        - task.retry.delay.factor=5
+        - generator.start.minute=1
+        - generator.end.minute=50
+        - preferred.load.profiles=fmalarmprocessing-.*
+        - prometheus.metrics.enabled={{ $.Values.global.monitoring.metricsEnabled }}
+        - prometheus.metrics.port=2004
+
+eric-neo4j-load-test-fwk-data-populator:
+  load:
+    neo4j:
+      templateProperties:
+        standalone:
+          - nodeType=startId;noOfMibs
+          - RadioNode_18_Q3_R49A16=1;10
+          - RadioNode_18_Q4_R57A02=1;10
+      extendedProperties:
+        - partitioned.database.fmdb=FM
+        - load.scaling.pattern.fmalarmprocessing-.*=2
+        - load.scaling.strategy=application_based
+    java:
+      debugPort: 5006
+tags:
+  validate: true

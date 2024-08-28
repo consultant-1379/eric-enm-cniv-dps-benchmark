@@ -1,0 +1,35 @@
+apiVersion: v1
+data:
+  templates.properties: |
+    {{- range $key, $values := .Values.load.neo4j.templateProperties }}
+      {{- range $value := $values }}
+        {{- if eq $key $.Values.global.load.type }}
+          {{ $value }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+  {{- if $.Values.global.load.transactionPropertiesPresent }}
+  transaction.properties: |
+    {{- if (hasKey .Values.load.neo4j.transactionProperties $.Values.global.load.type) }}
+      {{- range $key, $values := .Values.load.neo4j.transactionProperties }}
+        {{- range $value := $values }}
+          {{- if eq $key $.Values.global.load.type }}
+            {{ $value }}
+          {{- end }}
+        {{- end }}
+      {{- end }}
+    {{- else }}
+      appName=read;write
+      undefined=1;1
+    {{- end }}
+  {{- end }}
+  populator.properties: |
+    {{- range $value := .Values.load.neo4j.populatorProperties }}
+    {{ tpl $value $ }}
+    {{- end }}
+    {{- range $value := .Values.load.neo4j.extendedProperties }}
+    {{ tpl $value $ }}
+    {{- end }}
+kind: ConfigMap
+metadata:
+  name: neo4j-populator-cm

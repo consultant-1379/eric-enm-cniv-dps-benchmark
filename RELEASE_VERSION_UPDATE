@@ -1,0 +1,15 @@
+** Edit this file to release a new chart version, in a scenario where no other change to this project is required.
+
+** An example usage scenario of this is when a version change occurred to any modules in DPS-tools, but no other changes to
+helm chart, docker images, or values files are required. To ensure docker images are built with the release version of the DPS-tools module, the release
+pipeline of this repo must be run. Without a change to this file or any other files, it will produce the same build number, as the previous release build.
+
+** Why does it happen? Bob script generate-version, which is used to calculate the release version, calculates the new build number from the git history
+of VERSION_PREFIX file, how many commits ago it was modified.
+Bob's documentation: https://gerrit.ericsson.se/plugins/gitiles/adp-cicd/bob/+/HEAD/USER_GUIDE_2.0.md#Generate-Version
+
+** To edit this file include the TORF number of your story. If a change to this file is the only change (as it should be), you can +2 the code review and merge.
+
+TORF-672198
+TORF-684177
+No_Jira: Fix release pipeline not recognising changes

@@ -1,0 +1,50 @@
+# The only purpose for this utility is to work around a shortcoming in the scripts that build the CNIV CSAR.
+# When enabled, it will list out all the load-profile tags we support for CNIV (outlined in values.yaml), allowing the CSAR build scripts
+# to render the templates, identify and package all of the images that are required for production.
+{{- if $.Values.buildUtilityEnabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: dps-neo4j-ltf-build-utility
+spec:
+  # Safety guards in case the utility is not disabled via values. The following will ensure that Kubernetes does not spin up any Pods for this job
+  # in a production environment and does not await completion. I.e. it will terminate the moment it is scheduled, nothing defined here will be run.
+  completions: 0
+  parallelism: 1
+  template:
+    spec:
+      automountServiceAccountToken: false
+      nodeName: should-never-exist
+      restartPolicy: Never
+      {{- if $.Values.global.registry.pullSecret }}
+      imagePullSecrets:
+        - name: {{ $.Values.global.registry.pullSecret }}
+      {{- end }}
+      initContainers:
+      {{- range $.Values.global.load.otherSupportedLoad }}
+        - name: init-{{ . | replace "." "-" | replace "_" "-" | lower }}
+          image: {{ $.Values.global.registry.url }}/{{ $.Values.global.images.repo }}/{{ $.Values.global.images.neo4jLoadProfiles.name }}:{{ . }}
+          {{- if $.Values.global.securityContext.enabled }}
+          securityContext:
+            readOnlyRootFilesystem: true
+            privileged: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+        {{- end }}
+      {{- end }}
+      containers:
+        - name: build-utility
+          image: {{ $.Values.global.registry.url }}/{{ $.Values.global.images.repo }}/{{ $.Values.global.images.loadTestFramework.name }}:{{ $.Values.global.images.loadTestFramework.tag }}
+          command: [ "sleep", "1" ]
+          {{- if $.Values.global.securityContext.enabled }}
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          {{- end }}
+{{- end }}
